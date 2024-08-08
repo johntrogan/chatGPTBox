@@ -1,9 +1,19 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import PropTypes from 'prop-types'
 import Browser from 'webextension-polyfill'
 import InputBox from '../InputBox'
 import ConversationItem from '../ConversationItem'
-import { createElementAtPosition, isFirefox, isMobile, isSafari } from '../../utils'
+import {
+  apiModeToModelName,
+  createElementAtPosition,
+  getApiModesFromConfig,
+  isApiModeSelected,
+  isFirefox,
+  isMobile,
+  isSafari,
+  isUsingModelName,
+  modelNameToDesc,
+} from '../../utils'
 import {
   ArchiveIcon,
   DesktopDownloadIcon,
@@ -16,7 +26,7 @@ import FileSaver from 'file-saver'
 import { render } from 'preact'
 import FloatingToolbar from '../FloatingToolbar'
 import { useClampWindowSize } from '../../hooks/use-clamp-window-size'
-import { bingWebModelKeys, getUserConfig, ModelMode, Models } from '../../config/index.mjs'
+import { getUserConfig, isUsingBingWebModel, Models } from '../../config/index.mjs'
 import { useTranslation } from 'react-i18next'
 import DeleteButton from '../DeleteButton'
 import { useConfig } from '../../hooks/use-config.mjs'
@@ -52,34 +62,33 @@ function ConversationCard(props) {
   const windowSize = useClampWindowSize([750, 1500], [250, 1100])
   const bodyRef = useRef(null)
   const [completeDraggable, setCompleteDraggable] = useState(false)
-  // `.some` for multi mode models. e.g. bingFree4-balanced
-  const useForegroundFetch = bingWebModelKeys.some((n) => session.modelName.includes(n))
+  const useForegroundFetch = isUsingBingWebModel(session)
+  const [apiModes, setApiModes] = useState([])
 
   /**
    * @type {[ConversationItemData[], (conversationItemData: ConversationItemData[]) => void]}
    */
-  const [conversationItemData, setConversationItemData] = useState(
-    (() => {
-      if (session.conversationRecords.length === 0)
-        if (props.question && triggered)
-          return [
-            new ConversationItemData(
-              'answer',
-              `<p class="gpt-loading">${t(`Waiting for response...`)}</p>`,
-            ),
-          ]
-        else return []
-      else {
-        const ret = []
-        for (const record of session.conversationRecords) {
-          ret.push(new ConversationItemData('question', record.question, true))
-          ret.push(new ConversationItemData('answer', record.answer, true))
-        }
-        return ret
-      }
-    })(),
-  )
+  const [conversationItemData, setConversationItemData] = useState([])
   const config = useConfig()
+
+  useLayoutEffect(() => {
+    if (session.conversationRecords.length === 0) {
+      if (props.question && triggered)
+        setConversationItemData([
+          new ConversationItemData(
+            'answer',
+            `<p class="gpt-loading">${t(`Waiting for response...`)}</p>`,
+          ),
+        ])
+    } else {
+      const ret = []
+      for (const record of session.conversationRecords) {
+        ret.push(new ConversationItemData('question', record.question, true))
+        ret.push(new ConversationItemData('answer', record.answer, true))
+      }
+      setConversationItemData(ret)
+    }
+  }, [])
 
   useEffect(() => {
     setCompleteDraggable(!isSafari() && !isFirefox() && !isMobile())
@@ -110,6 +119,15 @@ function ConversationCard(props) {
       await postMessage({ session: newSession })
     }
   }, [props.question, triggered]) // usually only triggered once
+
+  useLayoutEffect(() => {
+    setApiModes(getApiModesFromConfig(config, true))
+  }, [
+    config.activeApiModes,
+    config.customApiModes,
+    config.azureDeploymentName,
+    config.ollamaModelName,
+  ])
 
   /**
    * @param {string} value
@@ -229,7 +247,7 @@ function ConversationCard(props) {
         }
         try {
           const bingToken = (await getUserConfig()).bingAccessToken
-          if (session.modelName.includes('bingFreeSydney'))
+          if (isUsingModelName('bingFreeSydney', session))
             await generateAnswersWithBingWebApi(
               fakePort,
               session.question,
@@ -362,33 +380,41 @@ function ConversationCard(props) {
             className="normal-button"
             required
             onChange={(e) => {
-              const modelName = e.target.value
-              const newSession = { ...session, modelName, aiName: Models[modelName].desc }
+              let apiMode = null
+              let modelName = 'customModel'
+              if (e.target.value !== '-1') {
+                apiMode = apiModes[e.target.value]
+                modelName = apiModeToModelName(apiMode)
+              }
+              const newSession = {
+                ...session,
+                modelName,
+                apiMode,
+                aiName: modelNameToDesc(
+                  apiMode ? apiModeToModelName(apiMode) : modelName,
+                  t,
+                  config.customModelName,
+                ),
+              }
               if (config.autoRegenAfterSwitchModel && conversationItemData.length > 0)
                 getRetryFn(newSession)()
               else setSession(newSession)
             }}
           >
-            {config.activeApiModes.map((modelName) => {
-              let desc
-              if (modelName.includes('-')) {
-                const splits = modelName.split('-')
-                if (splits[0] in Models)
-                  desc = `${t(Models[splits[0]].desc)} (${t(ModelMode[splits[1]])})`
-              } else {
-                if (modelName in Models) desc = t(Models[modelName].desc)
-              }
-              if (desc)
+            {apiModes.map((apiMode, index) => {
+              const modelName = apiModeToModelName(apiMode)
+              const desc = modelNameToDesc(modelName, t, config.customModelName)
+              if (desc) {
                 return (
-                  <option
-                    value={modelName}
-                    key={modelName}
-                    selected={modelName === session.modelName}
-                  >
+                  <option value={index} key={index} selected={isApiModeSelected(apiMode, session)}>
                     {desc}
                   </option>
                 )
+              }
             })}
+            <option value={-1} selected={!session.apiMode && session.modelName === 'customModel'}>
+              {t(Models.customModel.desc)}
+            </option>
           </select>
         </span>
         {props.draggable && !completeDraggable && (
@@ -529,7 +555,6 @@ function ConversationCard(props) {
             key={idx}
             type={data.type}
             descName={data.type === 'answer' && session.aiName}
-            modelName={data.type === 'answer' && session.modelName}
             onRetry={idx === conversationItemData.length - 1 ? retryFn : null}
           />
         ))}
