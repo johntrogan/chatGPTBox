@@ -33,7 +33,7 @@
     "graphql": "^16.9.0",
     "i18next": "^22.4.15",
     "js-sha3": "^0.9.3",
-    "jsonwebtoken": "8.5.1",
+    "jsonwebtoken": "9.0.0",
     "katex": "^0.16.11",
     "lodash-es": "^4.17.21",
     "md5": "^2.3.0",
@@ -90,7 +90,7 @@
     "sass-loader": "^13.3.3",
     "string-replace-loader": "^3.1.0",
     "terser-webpack-plugin": "^5.3.10",
-    "webpack": "^5.92.1",
+    "webpack": "^5.94.0",
     "webpack-bundle-analyzer": "^4.10.2"
   }
 }
