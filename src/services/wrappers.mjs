@@ -15,14 +15,18 @@ export async function getChatGptAccessToken() {
   if (userConfig.accessToken) {
     return userConfig.accessToken
   } else {
-    const cookie = (await Browser.cookies.getAll({ url: 'https://chatgpt.com/' }))
-      .map((cookie) => {
-        return `${cookie.name}=${cookie.value}`
-      })
-      .join('; ')
+    let cookie = ''
+    if (Browser.cookies && Browser.cookies.getAll) {
+      cookie = (await Browser.cookies.getAll({ url: 'https://chatgpt.com/' }))
+        .map(({ name, value }) => {
+          return `${name}=${value}`
+        })
+        .join('; ')
+    }
     const resp = await fetch('https://chatgpt.com/api/auth/session', {
+      credentials: 'include',
       headers: {
-        Cookie: cookie,
+        ...(cookie && { Cookie: cookie }),
       },
     })
     if (resp.status === 403) {

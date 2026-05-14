@@ -43,6 +43,7 @@ import {
   getBardCookies,
   getClaudeSessionKey,
 } from '../../../src/services/wrappers.mjs'
+import Browser from 'webextension-polyfill'
 
 const setStorage = (values) => {
   globalThis.__TEST_BROWSER_SHIM__.replaceStorage(values)
@@ -292,6 +293,7 @@ test('getChatGptAccessToken fetches token when not cached', async (t) => {
 
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     assert.equal(url, 'https://chatgpt.com/api/auth/session')
+    assert.equal(init.credentials, 'include')
     assert.equal(init.headers.Cookie, 'session=abc; cf=xyz')
     return {
       status: 200,
@@ -342,6 +344,78 @@ test('getChatGptAccessToken throws UNAUTHORIZED when json parsing fails', async 
   }))
 
   await assert.rejects(() => getChatGptAccessToken(), { message: 'UNAUTHORIZED' })
+})
+
+// ---------------------------------------------------------------------------
+// getChatGptAccessToken — Browser.cookies unavailable (issue #912)
+// ---------------------------------------------------------------------------
+
+test('getChatGptAccessToken omits Cookie header when Browser.cookies.getAll is unavailable', async (t) => {
+  t.mock.method(console, 'debug', () => {})
+  setStorage({ tokenSavedOn: Date.now() })
+
+  // Simulate environments (e.g. some Firefox / restricted contexts) where
+  // chrome.cookies.getAll is not exposed. Override on the polyfill object
+  // and restore afterwards so other tests are unaffected.
+  const originalGetAll = Browser.cookies.getAll
+  Object.defineProperty(Browser.cookies, 'getAll', {
+    value: undefined,
+    writable: true,
+    configurable: true,
+  })
+  t.after(() => {
+    Object.defineProperty(Browser.cookies, 'getAll', {
+      value: originalGetAll,
+      writable: true,
+      configurable: true,
+    })
+  })
+
+  let observedCredentials
+  let observedHasCookieHeader
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    assert.equal(url, 'https://chatgpt.com/api/auth/session')
+    observedCredentials = init.credentials
+    observedHasCookieHeader = Object.prototype.hasOwnProperty.call(init.headers, 'Cookie')
+    return {
+      status: 200,
+      json: async () => ({ accessToken: 'token-without-cookies' }),
+    }
+  })
+
+  const token = await getChatGptAccessToken()
+  assert.equal(token, 'token-without-cookies')
+  // No empty Cookie header — let the browser attach session cookies via credentials: 'include'.
+  assert.equal(observedHasCookieHeader, false)
+  assert.equal(observedCredentials, 'include')
+})
+
+test('getChatGptAccessToken omits Cookie header when Browser.cookies is undefined', async (t) => {
+  t.mock.method(console, 'debug', () => {})
+  setStorage({ tokenSavedOn: Date.now() })
+
+  // Simulate environments where the cookies API is entirely missing.
+  const originalCookies = Browser.cookies
+  Browser.cookies = undefined
+  t.after(() => {
+    Browser.cookies = originalCookies
+  })
+
+  let observedCredentials
+  let observedHasCookieHeader
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    observedCredentials = init.credentials
+    observedHasCookieHeader = Object.prototype.hasOwnProperty.call(init.headers, 'Cookie')
+    return {
+      status: 200,
+      json: async () => ({ accessToken: 'token-no-cookies-api' }),
+    }
+  })
+
+  const token = await getChatGptAccessToken()
+  assert.equal(token, 'token-no-cookies-api')
+  assert.equal(observedHasCookieHeader, false)
+  assert.equal(observedCredentials, 'include')
 })
 
 // ---------------------------------------------------------------------------
