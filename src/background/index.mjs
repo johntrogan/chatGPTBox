@@ -31,6 +31,7 @@ import {
   isUsingOpenRouterApiModel,
   isUsingAimlApiModel,
   isUsingDeepSeekApiModel,
+  isUsingNvidiaNimApiModel,
   isUsingGoogleApiModel,
   isUsingXaiApiModel,
 } from '../config/index.mjs'
@@ -401,6 +402,7 @@ function isUsingOpenAICompatibleApiSession(session) {
     isUsingMistralApiModel(session) ||
     isUsingChatGLMApiModel(session) ||
     isUsingDeepSeekApiModel(session) ||
+    isUsingNvidiaNimApiModel(session) ||
     isUsingOllamaApiModel(session) ||
     isUsingOpenRouterApiModel(session) ||
     isUsingAimlApiModel(session) ||

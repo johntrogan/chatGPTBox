@@ -1,6 +1,7 @@
 export const LEGACY_API_KEY_FIELD_BY_PROVIDER_ID = {
   openai: 'apiKey',
   deepseek: 'deepSeekApiKey',
+  'nvidia-nim': 'nvidiaNimApiKey',
   moonshot: 'moonshotApiKey',
   mistral: 'mistralApiKey',
   openrouter: 'openRouterApiKey',
@@ -25,6 +26,7 @@ export const OPENAI_COMPATIBLE_GROUP_TO_PROVIDER_ID = {
   moonshotApiModelKeys: 'moonshot',
   mistralApiModelKeys: 'mistral',
   deepSeekApiModelKeys: 'deepseek',
+  nvidiaNimApiModelKeys: 'nvidia-nim',
   openRouterApiModelKeys: 'openrouter',
   aimlModelKeys: 'aiml',
   aimlApiModelKeys: 'aiml',
