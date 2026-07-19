@@ -87,6 +87,14 @@ const BUILTIN_PROVIDER_TEMPLATE = [
     enabled: true,
   },
   {
+    id: 'xai',
+    name: 'xAI',
+    baseUrl: 'https://api.x.ai/v1',
+    chatCompletionsPath: '/chat/completions',
+    builtin: true,
+    enabled: true,
+  },
+  {
     id: 'legacy-custom-default',
     name: 'Custom Model (Legacy)',
     chatCompletionsPath: '/chat/completions',
@@ -130,6 +138,7 @@ function resolveProviderIdFromLegacyModelName(modelName) {
   }
   if (preset.startsWith('chatglm') || preset === 'chatglmApiModelKeys') return 'chatglm'
   if (preset.startsWith('googleGemini') || preset === 'googleApiModelKeys') return 'google'
+  if (preset.startsWith('xaiGrok') || preset === 'xaiApiModelKeys') return 'xai'
   if (preset === 'customApiModelKeys') return 'legacy-custom-default'
 
   return null
